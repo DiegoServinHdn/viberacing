@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Profit Recipe MX-CABALLERO-001 — Landing + MPP endpoint
 
-## Getting Started
+Landing page pública + endpoint `/api/buy` pagable con [Machine Payments Protocol](https://mpp.dev) que devuelve la Profit Recipe completa en markdown al recibir un pago verificado de **$1 USDC.e en Tempo**.
 
-First, run the development server:
+## Estructura
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- `app/page.tsx` — landing pública (no revela producto/fuente/destino)
+- `app/api/buy/route.ts` — endpoint MPP (HTTP 402 → 200 con `text/markdown`)
+- `recipe.md` — la receta completa, devuelta solo tras pago verificado
+- `next.config.ts` — incluye `recipe.md` en el bundle serverless de Vercel
+
+## Setup local
+
+1. Genera una cuenta Tempo y guarda la dirección:
+   ```bash
+   npx mppx account create
+   ```
+   Esto deja la cuenta en tu keychain y la auto-fondea en testnet.
+
+2. Copia `.env.example` a `.env.local` y pega tu dirección Tempo:
+   ```
+   MPP_RECIPIENT_ADDRESS=0x...
+   ```
+
+3. Arranca dev server:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+4. Probar el endpoint:
+   ```bash
+   # Ver el challenge 402 sin pagar
+   curl -i http://localhost:3000/api/buy
+
+   # Pagar y recibir el markdown (usa la cuenta del paso 1)
+   npx mppx http://localhost:3000/api/buy
+   ```
+
+## Deploy en Vercel
+
+1. `vercel link` y `vercel deploy`
+2. En el dashboard de Vercel agregar la env var:
+   - `MPP_RECIPIENT_ADDRESS` → tu dirección Tempo
+   - `MPP_TESTNET` → `false` cuando estés listo para mainnet
+3. Re-deploy.
+
+## Cómo lo compra un agente
+
+```ts
+import { privateKeyToAccount } from 'viem/accounts'
+import { Mppx, tempo } from 'mppx/client'
+
+Mppx.create({
+  methods: [tempo({ account: privateKeyToAccount('0x...') })],
+})
+
+const res = await fetch('https://<tu-dominio>/api/buy')
+const recipe = await res.text()
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Detalles MPP
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Currency:** `0x20c0000000000000000000000000000000000000` (pathUSD / USDC.e en Tempo TIP-20)
+- **Amount:** `1` (= $1 USDC.e)
+- **Method:** `mppx/nextjs` con `tempo.charge`
+- **Browser fallback:** `html: true` muestra una página de pago si abres el endpoint desde un navegador
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Editar la receta
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Edita `recipe.md` y re-deploya. El contenido se sirve solo a quien pagó el challenge.
